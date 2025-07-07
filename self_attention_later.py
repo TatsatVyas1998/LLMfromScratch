@@ -6,7 +6,7 @@ import torch.nn as nn
 
 class self_attention(nn.Module):
 
-    def __init__(self, d_in , d_out , context_length , drop_out , num_heads , qkv_bias= False):
+    def __init__(self, d_in , d_out , context_length , drop_out , num_heads , qkv_bias= False ):
         super().__init__()
 
         self.d_out = d_out

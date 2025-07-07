@@ -6,18 +6,19 @@ from self_attention_later import self_attention
 
 class gptmodel(nn.Module):
 
-    def __init__(self , cfg):
+    def __init__(self , cfg  , device = "cpu"):
 
         super().__init__()
-        self.tok_emb = nn.Embedding(cfg["vocab_size"] , cfg["embeding_dem"])
-        self.pos_emb = nn.Embedding(cfg["context_length"] , cfg["embeding_dem"])   #each token will be size of embeding_dem that has values ranging from 0 to vocab_size. the context_length will be number of token at each context window.
+        self.device = device
+        self.tok_emb = nn.Embedding(cfg["vocab_size"] , cfg["embeding_dem"] , device= device)
+        self.pos_emb = nn.Embedding(cfg["context_length"] , cfg["embeding_dem"] , device = device)   #each token will be size of embeding_dem that has values ranging from 0 to vocab_size. the context_length will be number of token at each context window.
         self.drop_emb = nn.Dropout(cfg["dropout_rate"])
 
-        self.trf_blocks = nn.Sequential( *[Transformerblock(cfg) for _ in range(cfg["n_layers"])])
+        self.trf_blocks = nn.Sequential( *[Transformerblock(cfg , device) for _ in range(cfg["n_layers"])])
         
-        self.final_norm = LayerNorm(cfg["embeding_dem"])
+        self.final_norm = LayerNorm(cfg["embeding_dem"] , device=device)
 
-        self.out_head = nn.Linear( cfg["embeding_dem"] ,cfg["vocab_size"] , bias= False )
+        self.out_head = nn.Linear( cfg["embeding_dem"] ,cfg["vocab_size"] , bias= True , device=device)
 
 
 
@@ -26,8 +27,8 @@ class gptmodel(nn.Module):
     def forward(self , int_idx):
 
         batch_size , seq_len = int_idx.shape
-        tok_emb = self.tok_emb(int_idx) 
-        pos_emb = self.pos_emb( torch.arange(seq_len))
+        tok_emb = self.tok_emb(int_idx)
+        pos_emb = self.pos_emb( torch.arange(seq_len , device = self.device))
 
         x = tok_emb + pos_emb
 
@@ -42,15 +43,15 @@ class gptmodel(nn.Module):
 
 class Transformerblock(nn.Module):
 
-    def __init__(self, cfg):
+    def __init__(self, cfg , device):
         
         super().__init__()
 
         self.att = self_attention(d_in= cfg["embeding_dem"] , d_out=cfg["embeding_dem"], context_length=cfg["context_length"] , drop_out=cfg["dropout_rate"] , num_heads=cfg["n_heads"]
-                                , qkv_bias= cfg["qkv_bias"] )
-        self.norm1 = LayerNorm(cfg["embeding_dem"])
-        self.norm2= LayerNorm(cfg["embeding_dem"])
-        self.ff= FeedForward(cfg)
+                                , qkv_bias= cfg["qkv_bias"] ).to(device=device)
+        self.norm1 = LayerNorm(cfg["embeding_dem"] , device= device)
+        self.norm2= LayerNorm(cfg["embeding_dem"] , device = device)
+        self.ff= FeedForward(cfg , device=device)
         self.drop_shortcut = nn.Dropout(cfg["dropout_rate"])
         
     
@@ -73,12 +74,12 @@ class Transformerblock(nn.Module):
 
 class LayerNorm(nn.Module):
 
-    def __init__(self, normalized_shape, eps=1e-5):
+    def __init__(self, normalized_shape, eps=1e-5 , device =  "cpu"):
 
         super().__init__()
         self.eps = eps
-        self.scale = nn.Parameter(torch.ones(normalized_shape))
-        self.shift = nn.Parameter(torch.zeros(normalized_shape))
+        self.scale = nn.Parameter(torch.ones(normalized_shape) ).to(device = device)
+        self.shift = nn.Parameter(torch.zeros(normalized_shape) ). to(device = device)
     
     def forward(self, x):
         mean = x.mean( dim = -1 , keepdim= True)
@@ -89,10 +90,10 @@ class LayerNorm(nn.Module):
 
 class FeedForward(nn.Module):
 
-    def __init__(self , cfg):
+    def __init__(self , cfg , device = "cpu"):
 
         super().__init__()
-        self.layer = nn.Sequential(nn.Linear(cfg["embeding_dem"], 4*cfg["embeding_dem"]) , nn.GELU() , nn.Linear(4*cfg["embeding_dem"] , cfg["embeding_dem"]))
+        self.layer = nn.Sequential(nn.Linear(cfg["embeding_dem"], 4*cfg["embeding_dem"] , device=device) , nn.GELU() , nn.Linear(4*cfg["embeding_dem"] , cfg["embeding_dem"] , device = device))
 
     def forward(self,x):
 

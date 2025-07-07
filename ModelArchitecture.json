@@ -1,11 +1,11 @@
 { 
     "GPT_CONFIG_124M" : {
             "vocab_size": 50257, 
-            "context_length": 50, 
+            "context_length": 1024, 
             "embeding_dem": 768,
             "n_heads": 12,
             "n_layers": 12,
             "dropout_rate": 0.1,
-            "qkv_bias": false
+            "qkv_bias": true
     }
 }

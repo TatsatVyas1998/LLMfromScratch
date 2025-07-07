@@ -34,7 +34,7 @@ def cal_loss_loader(  data_loader , model , device , num_batches):
     total_loss = 0
     i = 0
     for input_data , target_data in data_loader:
-        total_loss+= calc_loss( input_data , target_data , model)
+        total_loss+= calc_loss( input_data.to(device= device) , target_data.to(device=device) , model)
         i+=1
         if( i == num_batches):
             break
@@ -53,8 +53,7 @@ def generate_and_print_sample( model , tokenizer , device , start_context):
     model.eval() 
     encoded = text_to_token_ids(start_context, tokenizer).to(device)
     with torch.no_grad():
-        id_ = tokenizer.eos_id
-        token_ids = generate_text_simple(model = model , batch = encoded , max_iter = 2, eos_id=tokenizer.encode('<|endoftext|>')[0])
+        token_ids = generate_text_simple(model = model , batch = encoded , max_iter = 25, eos_id=tokenizer.encode('<|endoftext|>' , allowed_special = {'<|endoftext|>'})[0])
     decoded_text = token_ids_to_text( token_ids , tokenizer)
     print(decoded_text.replace( "\n", " "))
     model.train()
@@ -63,14 +62,17 @@ def generate_and_print_sample( model , tokenizer , device , start_context):
 def generate_text_simple( model ,batch , max_iter, eos_id = None):
     num_sentence , _ = batch.shape
     for i in range(max_iter):
-
+        
         output = model(batch)
-        final_logits = torch.stack([ logits[-1][:] for logits in output])
-        value , _ = torch.top_k(final_logits , 4)
+        final_logits = torch.softmax(torch.stack([ logits[-1][:] for logits in output]), dim = -1)
+        
+        value , _ = torch.topk(final_logits , 4)
         min_value = value[:, -1]
-        final_logits = torch.where( final_logits < min_value , torch.tensor(float('-inf')).to(final_logits.device) , final_logits)
+        final_logits = torch.where( final_logits < min_value , torch.tensor(float(0)).to(final_logits.device) , final_logits)
         final_logits = final_logits / 1 #temprature scaling
+        
         next_words = torch.multinomial(final_logits, num_samples=1) #torch.argmax(output , dim = -1)#.reshape(num_sentence , 1 )
+        #print(next_words,final_logits[0][int(next_words[0][0])]) #[int(next_words[0][0])])
         if( eos_id and next_words == eos_id):
             break
         batch = torch.cat( (batch , next_words) , dim =1 )
@@ -83,7 +85,7 @@ def token_ids_to_text( tokens , tokenizer):
     flat = tokens.squeeze(0).tolist()
     return tokenizer.decode(flat)
 
-def text_to_token_ids( text , tokenizer):
+def text_to_token_ids( text , tokenizer ):
     
     tokens = tokenizer.encode(text , allowed_special = {'<|endoftext|>'})
     tokens = torch.tensor(tokens).unsqueeze(0)
@@ -96,7 +98,7 @@ def train_model_simple( model , train_loader , val_loader , optimizer , device ,
         model.train()
         for input_batch , target_batch in train_loader:
             optimizer.zero_grad()
-            loss = calc_loss( input_batch, target_batch, model)
+            loss = calc_loss( input_batch.to(device= device), target_batch.to(device=device), model)
             loss.backward()
             optimizer.step()
             tokens_seen += input_batch.numel()
@@ -112,16 +114,16 @@ def train_model_simple( model , train_loader , val_loader , optimizer , device ,
                     f"Val loss {val_loss:.3f}")
         generate_and_print_sample(model , tokenizer, device, start_context)
     return train_losses, val_losses , track_tokens_seen
-
+"""
 config = "./ModelArchitecture.json"
 
 with open(config , "r") as file:
     cfg = json.load(file)
 
-model = gptmodel(cfg["GPT_CONFIG_124M"])
-optimizer = torch.optim.AdamW(model.parameters() , lr = 0.0004 , weight_decay=0.1)
-train_losses , val_losses  , toekns_seen = train_model_simple( model ,trainloader , testloader , optimizer , "cpu" , num_epochs=2 , eval_freq=5 , eval_iter=2 , start_context="Every effort moves you", tokenizer=get_encoding("gpt2") )
-
+model = gptmodel(cfg["GPT_CONFIG_124M"] , device="cuda")
+optimizer = torch.optim.AdamW(model.parameters() , lr = 0.0004 , weight_decay=0.1 )
+train_losses , val_losses  , toekns_seen = train_model_simple( model ,trainloader , testloader , optimizer , "cuda" , num_epochs=2 , eval_freq=5 , eval_iter=2 , start_context="Every effort moves you", tokenizer=get_encoding("gpt2") )
+"""
 
 
 
